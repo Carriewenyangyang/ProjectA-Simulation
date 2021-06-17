@@ -33,6 +33,8 @@
 
  */
  using namespace ns3;
+ using namespace mcg;
+
  
  NS_LOG_COMPONENT_DEFINE ("SimpleGlobalRoutingExample");
  
@@ -70,13 +72,14 @@ void CheckQueue(QueueDiscContainer qdisc, Ptr<OutputStreamWrapper> streamTxt)
 }
 
 
-static void GenerateTraffic (Ptr<Socket> socket, &state Size, &state time, double timemean, double packetsSizemean)
+static void GenerateTraffic (Ptr<Socket> socket, state Size, state time, double timemean, double packetsSizemean)
 {
 	//uint32_t pktSize = randomSize->GetInteger (); //Get random value for packet size
-	std::cout << "::::: A packet is generate at Node "<< socket->GetNode ()->GetId () << " with size " << pktSize <<" bytes ! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
+	
 	
 	//   GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomSize,	Ptr<ExponentialRandomVariable> randomTime)
 	uint32_t pktSize = exp_transform(Xn_norm_to_U(Size), packetsSizemean);
+	std::cout << "::::: A packet is generate at Node "<< socket->GetNode ()->GetId () << " with size " << pktSize <<" bytes ! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
  	Time pktInterval = Seconds(exp_transform(Xn_norm_to_U(time), timemean));
 
 	
@@ -296,17 +299,17 @@ static void GenerateTraffic (Ptr<Socket> socket, &state Size, &state time, doubl
    double timemean_AB = 0.002; //2 ms
    double timemean_C = 0.0005; //0.5 ms
    double timemean_D = 0.001; //1 ms
-   Ptr<ExponentialRandomVariable> randomTime_AB = CreateObject<ExponentialRandomVariable> ();
+   /*Ptr<ExponentialRandomVariable> randomTime_AB = CreateObject<ExponentialRandomVariable> ();
    randomTime_AB->SetAttribute ("Mean", DoubleValue (mean_AB));
    Ptr<ExponentialRandomVariable> randomTime_C = CreateObject<ExponentialRandomVariable> ();
    randomTime_C->SetAttribute ("Mean", DoubleValue (mean_C));
    Ptr<ExponentialRandomVariable> randomTime_D = CreateObject<ExponentialRandomVariable> ();
    randomTime_D->SetAttribute ("Mean", DoubleValue (mean_D));
-   
+   */
    //Mean packet time
    double packetsSizemean = 100; // 100 Bytes
-   Ptr<ExponentialRandomVariable> randomSize = CreateObject<ExponentialRandomVariable> ();
-   randomSize->SetAttribute ("Mean", DoubleValue (mean));
+   //Ptr<ExponentialRandomVariable> randomSize = CreateObject<ExponentialRandomVariable> ();
+   //randomSize->SetAttribute ("Mean", DoubleValue (mean));
 
    Simulator::ScheduleWithContext (sourceA->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceA, Size, time, timemean_AB, packetsSizemean);
    Simulator::ScheduleWithContext (sourceB->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceB, Size, time, timemean_AB, packetsSizemean);
