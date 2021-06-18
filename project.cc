@@ -9,6 +9,7 @@
  #include "ns3/internet-module.h"
  #include "ns3/point-to-point-module.h"
  #include "ns3/applications-module.h"
+ #include "ns3/traffic-control-module.h"
  #include "ns3/flow-monitor-helper.h"
  #include "ns3/ipv4-global-routing-helper.h"
  #include "ns3/netanim-module.h"
@@ -34,6 +35,22 @@
  
  NS_LOG_COMPONENT_DEFINE ("SimpleGlobalRoutingExample");
  
+void CheckQueue(QueueDiscContainer qdisc, Ptr<OutputStreamWrapper> streamTxt)
+{
+	uint32_t n = qdisc.GetN();
+	Ptr<QueueDisc> p;
+	uint32_t size;
+
+	for (uint32_t i = 0; i < n; i++)
+	{
+		p = qdisc.Get(i);
+		size = p->GetNPackets();
+		*streamTxt->GetStream() << size << std::endl;
+		//std::cout << "::::: qdisc length:   "  << n << std::endl;
+	}
+}
+
+ 
  static void received_msg (Ptr<Socket> socket1, Ptr<Socket> socket2, Ptr<const Packet> p, const Address &srcAddress , const Address &dstAddress)
 {
 	std::cout << "::::: A packet received at the Server! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
@@ -54,6 +71,8 @@
 static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomSize,	Ptr<ExponentialRandomVariable> randomTime)
 {
 	uint32_t pktSize = randomSize->GetInteger (); //Get random value for packet size
+
+
 	std::cout << "::::: A packet is generate at Node "<< socket->GetNode ()->GetId () << " with size " << pktSize <<" bytes ! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
 	
 	// We make sure that the message is at least 12 bytes. The minimum length of the UDP header. We would get error otherwise.
@@ -86,7 +105,16 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
  
   
    bool enableFlowMonitor = true;
-  
+   std::string queueSize = "1000";
+   double simulationTime = 60; //seconds
+   double mu = 330;
+   double lambda = 300;
+   CommandLine cmd;
+   cmd.AddValue ("simulationTime", "Simulation time [s]", simulationTime);
+   cmd.AddValue ("queueSize", "Size of queue [no. of packets]", queueSize);
+   cmd.AddValue ("lambda", "Arrival rate [packets/s]", lambda);
+   cmd.AddValue ("mu", "Service rate [packets/s]", mu);
+   cmd.Parse (argc, argv);
  
 
    NS_LOG_INFO ("Create nodes.");
@@ -117,10 +145,13 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
    PointToPointHelper p2p_3;
    p2p_1.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
    p2p_1.SetChannelAttribute ("Delay", StringValue ("2ms"));
+   p2p_1.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
    p2p_2.SetDeviceAttribute ("DataRate", StringValue ("8Mbps"));
    p2p_2.SetChannelAttribute ("Delay", StringValue ("2ms"));
+   p2p_2.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
    p2p_3.SetDeviceAttribute ("DataRate", StringValue ("10Mbps"));
    p2p_3.SetChannelAttribute ("Delay", StringValue ("2ms"));
+   p2p_3.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
    
    NetDeviceContainer dAdE = p2p_1.Install (nAnE);
    NetDeviceContainer dBdF = p2p_1.Install (nBnF);
@@ -132,6 +163,29 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
    NetDeviceContainer dGdR = p2p_2.Install (nGnR);
    
    NetDeviceContainer dGdS = p2p_3.Install (nGnS);
+   
+   TrafficControlHelper tch;
+   tch.SetRootQueueDisc ("ns3::FifoQueueDisc", "MaxSize", StringValue (queueSize+"p"));
+   QueueDiscContainer qdiscs = tch.Install (dAdE);
+   qdiscs = tch.Install (dBdF);
+   qdiscs = tch.Install (dCdF);
+   qdiscs = tch.Install (dDdG);
+   qdiscs = tch.Install (dEdG);
+   qdiscs = tch.Install (dFdG);
+   qdiscs = tch.Install (dGdR);
+   qdiscs = tch.Install (dGdS);
+   
+   Ptr<TrafficControlLayer> tc = c.Get(6)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd = tc->GetRootQueueDiscOnDevice(dGdS.Get(0));
+   
+   AsciiTraceHelper asciiTraceHelper;
+   Ptr<OutputStreamWrapper> streamTxt = asciiTraceHelper.CreateFileStream("queue_P2P.txt");
+   
+	for (float t = 1.0; t < 60; t += 0.001)
+	{
+    		Simulator::Schedule(Seconds(t), &CheckQueue, qd, streamTxt);
+	}
+  
   
    // Later, we add IP addresses.
    NS_LOG_INFO ("Assign IP Addresses.");
@@ -193,7 +247,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
    S1->TraceConnectWithoutContext ("RxWithAddresses", MakeBoundCallback (&received_msg, source1, source2));
    
    server_apps.Start (Seconds (1.0));
-   server_apps.Stop (Seconds (10.0));
+   server_apps.Stop (Seconds (60.0));
    
    	//
 	// Create a UdpServer application on node A,B,C,D to receive the reply from the server.
@@ -282,7 +336,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
      }
  
    NS_LOG_INFO ("Run Simulation.");
-   Simulator::Stop (Seconds (12));
+   Simulator::Stop (Seconds (60));
    Simulator::Run ();
    NS_LOG_INFO ("Done.");
  
