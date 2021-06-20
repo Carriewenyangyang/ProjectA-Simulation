@@ -50,7 +50,14 @@ void CheckQueue(QueueDiscContainer qdisc, Ptr<OutputStreamWrapper> streamTxt)
 	}
 }
 
- 
+void DeviceTimeInQueueDiscTrace(Ptr<QueueDisc>qd, Ptr<OutputStreamWrapper> streamTxt)
+{
+	 //qd->TraceConnectWithoutContext( "SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt) );
+	 
+	 *streamTxt->GetStream()<< QueueDisc::PacketDequeued(qd.m_sojourn(Simulator::Now () - item->GetTimeStamp ()) << std::endl;	
+}
+
+
  static void received_msg (Ptr<Socket> socket1, Ptr<Socket> socket2, Ptr<const Packet> p, const Address &srcAddress , const Address &dstAddress)
 {
 	std::cout << "::::: A packet received at the Server! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
@@ -186,7 +193,14 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
     		Simulator::Schedule(Seconds(t), &CheckQueue, qd, streamTxt);
 	}
   
-  
+   Ptr<QueueDisc>qd_delay = tc->GetRootQueueDiscOnDevice(dFdG.Get(0));
+   //qd->TraceConnectWithoutContext( "SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt) );
+   Ptr<OutputStreamWrapper> streamTxt_delay = asciiTraceHelper.CreateFileStream("queue_P2P_delay.txt");	
+   	for (float t = 1.0; t < 60; t += 0.001)
+	{
+    		Simulator::Schedule(Seconds(t), &DeviceTimeInQueueDiscTrace, qd_delay, streamTxt_delay);
+	}
+   
    // Later, we add IP addresses.
    NS_LOG_INFO ("Assign IP Addresses.");
    Ipv4AddressHelper ipv4;
