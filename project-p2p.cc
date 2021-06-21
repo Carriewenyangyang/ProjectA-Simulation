@@ -8,7 +8,6 @@
  #include "ns3/network-module.h"
  #include "ns3/internet-module.h"
  #include "ns3/point-to-point-module.h"
- #include "ns3/csma-module.h"
  #include "ns3/applications-module.h"
  #include "ns3/traffic-control-module.h"
  #include "ns3/flow-monitor-helper.h"
@@ -36,21 +35,19 @@
  
  NS_LOG_COMPONENT_DEFINE ("SimpleGlobalRoutingExample");
  
- void CheckQueue(QueueDiscContainer qdisc, Ptr<OutputStreamWrapper> streamTxt)
+void CheckQueue(QueueDiscContainer qdisc, Ptr<OutputStreamWrapper> streamTxt)
 {
 	uint32_t n = qdisc.GetN();
 	Ptr<QueueDisc> p;
 	uint32_t size;
+
 	for (uint32_t i = 0; i < n; i++)
 	{
 		p = qdisc.Get(i);
 		size = p->GetNPackets();
-		if (size > 0) {
-		*streamTxt->GetStream() << size <<n<< "::::: qdisc length:   "<< n<<std::endl;}
-		else {
-			std::cout<<"::::no queue"<<std::endl;
+		*streamTxt->GetStream() << size << std::endl;
+		//std::cout << "::::: qdisc length:   "  << n << std::endl;
 	}
-}
 }
 
 void DeviceTimeInQueueDiscTrace(Ptr<OutputStreamWrapper> streamTxt_delay, ns3::Time t)
@@ -58,8 +55,8 @@ void DeviceTimeInQueueDiscTrace(Ptr<OutputStreamWrapper> streamTxt_delay, ns3::T
 	*streamTxt_delay->GetStream()<< t.As(Time::MS) << std::endl;
 	
 }
- 
- 
+
+
  static void received_msg (Ptr<Socket> socket1, Ptr<Socket> socket2, Ptr<const Packet> p, const Address &srcAddress , const Address &dstAddress)
 {
 	std::cout << "::::: A packet received at the Server! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
@@ -80,6 +77,8 @@ void DeviceTimeInQueueDiscTrace(Ptr<OutputStreamWrapper> streamTxt_delay, ns3::T
 static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomSize,	Ptr<ExponentialRandomVariable> randomTime)
 {
 	uint32_t pktSize = randomSize->GetInteger (); //Get random value for packet size
+
+
 	std::cout << "::::: A packet is generate at Node "<< socket->GetNode ()->GetId () << " with size " << pktSize <<" bytes ! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
 	
 	// We make sure that the message is at least 12 bytes. The minimum length of the UDP header. We would get error otherwise.
@@ -112,7 +111,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
  
   
    bool enableFlowMonitor = true;
-     std::string queueSize = "1000";
+   std::string queueSize = "1000";
    double simulationTime = 60; //seconds
    double mu = 330;
    double lambda = 300;
@@ -147,34 +146,30 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
  
    // We create the channels first without any IP addressing information
    NS_LOG_INFO ("Create channels.");
-   //PointToPointHelper p2p_1;
-   //PointToPointHelper p2p_2;
-   //PointToPointHelper p2p_3;
-   CsmaHelper csma1;
-   CsmaHelper csma2;
-   CsmaHelper csma3;
-   csma1.SetChannelAttribute ("DataRate", StringValue ("5Mbps"));
-   csma1.SetChannelAttribute ("Delay", TimeValue (NanoSeconds (2000000)));
-   csma1.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
-   csma2.SetChannelAttribute ("DataRate", StringValue ("8Mbps"));
-   csma2.SetChannelAttribute ("Delay", TimeValue (NanoSeconds (2000000)));
-   csma2.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
-   csma3.SetChannelAttribute ("DataRate", StringValue ("10Mbps"));
-   csma3.SetChannelAttribute ("Delay", TimeValue (NanoSeconds (2000000)));
-   csma3.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
+   PointToPointHelper p2p_1;
+   PointToPointHelper p2p_2;
+   PointToPointHelper p2p_3;
+   p2p_1.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
+   p2p_1.SetChannelAttribute ("Delay", StringValue ("2ms"));
+   p2p_1.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
+   p2p_2.SetDeviceAttribute ("DataRate", StringValue ("8Mbps"));
+   p2p_2.SetChannelAttribute ("Delay", StringValue ("2ms"));
+   p2p_2.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
+   p2p_3.SetDeviceAttribute ("DataRate", StringValue ("10Mbps"));
+   p2p_3.SetChannelAttribute ("Delay", StringValue ("2ms"));
+   p2p_3.SetQueue ("ns3::DropTailQueue", "MaxSize", StringValue ("1p"));
    
+   NetDeviceContainer dAdE = p2p_1.Install (nAnE);
+   NetDeviceContainer dBdF = p2p_1.Install (nBnF);
+   NetDeviceContainer dCdF = p2p_1.Install (nCnF);
+   NetDeviceContainer dDdG = p2p_1.Install (nDnG);
+   NetDeviceContainer dEdG = p2p_1.Install (nEnG);
    
-   NetDeviceContainer dAdE = csma1.Install (nAnE);
-   NetDeviceContainer dBdF = csma1.Install (nBnF);
-   NetDeviceContainer dCdF = csma1.Install (nCnF);
-   NetDeviceContainer dDdG = csma1.Install (nDnG);
-   NetDeviceContainer dEdG = csma1.Install (nEnG);
+   NetDeviceContainer dFdG = p2p_2.Install (nFnG);
+   NetDeviceContainer dGdR = p2p_2.Install (nGnR);
    
-   NetDeviceContainer dFdG = csma2.Install (nFnG);
-   NetDeviceContainer dGdR = csma2.Install (nGnR);
+   NetDeviceContainer dGdS = p2p_3.Install (nGnS);
    
-   NetDeviceContainer dGdS = csma3.Install (nGnS);
-  
    TrafficControlHelper tch;
    tch.SetRootQueueDisc ("ns3::FifoQueueDisc", "MaxSize", StringValue (queueSize+"p"));
    QueueDiscContainer qdiscs = tch.Install (dAdE);
@@ -196,7 +191,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
 	{
     		Simulator::Schedule(Seconds(t), &CheckQueue, qd, streamTxt);
 	}
-  
+   
    Ptr<TrafficControlLayer> tf = c.Get(5)->GetObject<TrafficControlLayer>();
    Ptr<QueueDisc>qd_fg = tf->GetRootQueueDiscOnDevice(dFdG.Get(0));
    Ptr<OutputStreamWrapper> streamTxt_fg = asciiTraceHelper.CreateFileStream("queue_P2P_fg.txt");
@@ -237,9 +232,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
    Ptr<QueueDisc>qd_eA = te->GetRootQueueDiscOnDevice(dAdE.Get(1));
    Ptr<OutputStreamWrapper> streamTxt_eA = asciiTraceHelper.CreateFileStream("queue_P2P_eA.txt");
    qd_eA->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_eA) );
- 
-  
-  
+	
    // Later, we add IP addresses.
    NS_LOG_INFO ("Assign IP Addresses.");
    Ipv4AddressHelper ipv4;
@@ -360,12 +353,12 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
 
  
    /*AsciiTraceHelper ascii;
-   csma1.EnableAsciiAll (ascii.CreateFileStream ("projectA-1.tr"));
-   csma1.EnablePcapAll ("projectA-1");
-   csma2.EnableAsciiAll (ascii.CreateFileStream ("projectA-2.tr"));
-   csma2.EnablePcapAll ("projectA-2");
-   csma3.EnableAsciiAll (ascii.CreateFileStream ("projectA-3.tr"));
-   csma3.EnablePcapAll ("projectA-3");*/
+   p2p_1.EnableAsciiAll (ascii.CreateFileStream ("projectA-1.tr"));
+   p2p_1.EnablePcapAll ("projectA-1");
+   p2p_2.EnableAsciiAll (ascii.CreateFileStream ("projectA-2.tr"));
+   p2p_2.EnablePcapAll ("projectA-2");
+   p2p_3.EnableAsciiAll (ascii.CreateFileStream ("projectA-3.tr"));
+   p2p_3.EnablePcapAll ("projectA-3");*/
  
    AnimationInterface anim ("project.xml");
    anim.EnablePacketMetadata (true);
