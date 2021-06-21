@@ -1,9 +1,10 @@
-  
+ 
  #include <iostream>
  #include <fstream>
  #include <string>
  #include <cassert>
  
+ #include "MCG.h"
  #include "ns3/core-module.h"
  #include "ns3/network-module.h"
  #include "ns3/internet-module.h"
@@ -29,9 +30,10 @@
  
    // A B C D E F G Server Router
    // 0 1 2 3 4 5 6 7      8
-
  */
  using namespace ns3;
+ using namespace mcg;
+
  
  NS_LOG_COMPONENT_DEFINE ("SimpleGlobalRoutingExample");
  
@@ -40,24 +42,23 @@ void CheckQueue(QueueDiscContainer qdisc, Ptr<OutputStreamWrapper> streamTxt)
 	uint32_t n = qdisc.GetN();
 	Ptr<QueueDisc> p;
 	uint32_t size;
-
 	for (uint32_t i = 0; i < n; i++)
 	{
 		p = qdisc.Get(i);
 		size = p->GetNPackets();
-		*streamTxt->GetStream() << size << std::endl;
-		//std::cout << "::::: qdisc length:   "  << n << std::endl;
+		if (size > 0) {
+		*streamTxt->GetStream() << size << "::::: qdisc length:   "<< n<<std::endl;}
+		else {
+			std::cout<<"::::no queue"<<std::endl;
 	}
 }
-
-void DeviceTimeInQueueDiscTrace(Ptr<QueueDisc>qd, Ptr<OutputStreamWrapper> streamTxt)
-{
-	 //qd->TraceConnectWithoutContext( "SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt) );
-	 
-	 *streamTxt->GetStream()<< QueueDisc::PacketDequeued(qd.m_sojourn(Simulator::Now () - item->GetTimeStamp ()) << std::endl;	
 }
-
-
+void DeviceTimeInQueueDiscTrace(Ptr<OutputStreamWrapper> streamTxt_delay, ns3::Time t)
+{
+	*streamTxt_delay->GetStream()<< t.As(Time::MS) << std::endl;
+	
+}
+ 
  static void received_msg (Ptr<Socket> socket1, Ptr<Socket> socket2, Ptr<const Packet> p, const Address &srcAddress , const Address &dstAddress)
 {
 	std::cout << "::::: A packet received at the Server! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
@@ -75,12 +76,16 @@ void DeviceTimeInQueueDiscTrace(Ptr<QueueDisc>qd, Ptr<OutputStreamWrapper> strea
 }
 
 
-static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomSize,	Ptr<ExponentialRandomVariable> randomTime)
+static void GenerateTraffic (Ptr<Socket> socket, state Size, state time, double timemean, double packetsSizemean)
 {
-	uint32_t pktSize = randomSize->GetInteger (); //Get random value for packet size
-
-
+	//uint32_t pktSize = randomSize->GetInteger (); //Get random value for packet size
+	
+	
+	//   GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomSize,	Ptr<ExponentialRandomVariable> randomTime)
+	uint32_t pktSize = exp_transform(Xn_norm_to_U(Size), packetsSizemean);
 	std::cout << "::::: A packet is generate at Node "<< socket->GetNode ()->GetId () << " with size " << pktSize <<" bytes ! Time:   " << Simulator::Now ().GetSeconds () << std::endl;
+ 	Time pktInterval = Seconds(exp_transform(Xn_norm_to_U(time), timemean));
+
 	
 	// We make sure that the message is at least 12 bytes. The minimum length of the UDP header. We would get error otherwise.
 	if(pktSize<12){
@@ -89,8 +94,8 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
 	
 	socket->Send (Create<Packet> (pktSize));
 
-	Time pktInterval = Seconds(randomTime->GetValue ()); //Get random value for next packet generation time 
-	Simulator::Schedule (pktInterval, &GenerateTraffic, socket, randomSize, randomTime); //Schedule next packet generation
+	//Time pktInterval = Seconds(randomTime->GetValue ()); //Get random value for next packet generation time 
+	Simulator::Schedule (pktInterval, &GenerateTraffic, socket, Size, time); //Schedule next packet generation
 }
  
  int 
@@ -193,14 +198,48 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
     		Simulator::Schedule(Seconds(t), &CheckQueue, qd, streamTxt);
 	}
   
-   Ptr<QueueDisc>qd_delay = tc->GetRootQueueDiscOnDevice(dFdG.Get(0));
-   //qd->TraceConnectWithoutContext( "SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt) );
-   Ptr<OutputStreamWrapper> streamTxt_delay = asciiTraceHelper.CreateFileStream("queue_P2P_delay.txt");	
-   	for (float t = 1.0; t < 60; t += 0.001)
-	{
-    		Simulator::Schedule(Seconds(t), &DeviceTimeInQueueDiscTrace, qd_delay, streamTxt_delay);
-	}
-   
+   Ptr<TrafficControlLayer> tf = c.Get(5)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_fg = tf->GetRootQueueDiscOnDevice(dFdG.Get(0));
+   Ptr<OutputStreamWrapper> streamTxt_fg = asciiTraceHelper.CreateFileStream("queue_P2P_fg.txt");
+   qd_fg->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_fg) );
+
+   Ptr<QueueDisc>qd_gf = tc->GetRootQueueDiscOnDevice(dFdG.Get(1));
+   Ptr<OutputStreamWrapper> streamTxt_gf = asciiTraceHelper.CreateFileStream("queue_P2P_gf.txt");
+   qd_gf->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_gf) );
+   //A-e-g-Server
+   //A-e
+   Ptr<TrafficControlLayer> tA = c.Get(0)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_Ae = tA->GetRootQueueDiscOnDevice(dAdE.Get(0));
+   Ptr<OutputStreamWrapper> streamTxt_Ae = asciiTraceHelper.CreateFileStream("queue_P2P_Ae.txt");
+   qd_fg->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_Ae) );
+   //e-g
+   Ptr<TrafficControlLayer> te = c.Get(4)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_eg = te->GetRootQueueDiscOnDevice(dEdG.Get(0));
+   Ptr<OutputStreamWrapper> streamTxt_eg = asciiTraceHelper.CreateFileStream("queue_P2P_eg.txt");
+   qd_fg->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_eg) );
+   //g-Server
+   Ptr<TrafficControlLayer> tg = c.Get(6)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_gs = tg->GetRootQueueDiscOnDevice(dGdS.Get(0));
+   Ptr<OutputStreamWrapper> streamTxt_gs = asciiTraceHelper.CreateFileStream("queue_P2P_gs.txt");
+   qd_gs->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_gs) );
+   //Server-g-e-A
+   //Server-g
+   Ptr<TrafficControlLayer> ts = c.Get(7)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_sg = ts->GetRootQueueDiscOnDevice(dGdS.Get(1));
+   Ptr<OutputStreamWrapper> streamTxt_sg = asciiTraceHelper.CreateFileStream("queue_P2P_sg.txt");
+   qd_sg->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_sg) );
+   //g-e
+   //Ptr<TrafficControlLayer> tg = c.Get(6)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_ge = tg->GetRootQueueDiscOnDevice(dEdG.Get(1));
+   Ptr<OutputStreamWrapper> streamTxt_ge = asciiTraceHelper.CreateFileStream("queue_P2P_ge.txt");
+   qd_ge->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_ge) );
+   //e-A
+   //Ptr<TrafficControlLayer> te = c.Get(4)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_eA = te->GetRootQueueDiscOnDevice(dAdE.Get(1));
+   Ptr<OutputStreamWrapper> streamTxt_eA = asciiTraceHelper.CreateFileStream("queue_P2P_eA.txt");
+   qd_eA->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_eA) );
+
+
    // Later, we add IP addresses.
    NS_LOG_INFO ("Assign IP Addresses.");
    Ipv4AddressHelper ipv4;
@@ -296,37 +335,45 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
   //Ptr<Socket> sourceF= Socket::CreateSocket (c.Get (5), tid);
   //sourceF->Connect (remote);
   
-  
+   //s={previous_x, a, b, m}
+   state Size = {1, 13, 1, (unsigned int)(1 << 31)};
+   state time = {1, 13, 1, (unsigned int)(1 << 31)};
+   
+   
+   
    //Mean inter-transmission time: A,B:2ms; C:0.5ms; D:1ms.
-   double mean_AB = 0.002; //2 ms
-   double mean_C = 0.0005; //0.5 ms
-   double mean_D = 0.001; //1 ms
-   Ptr<ExponentialRandomVariable> randomTime_AB = CreateObject<ExponentialRandomVariable> ();
+   double timemean_AB = 0.002; //2 ms
+   double timemean_C = 0.0005; //0.5 ms
+   double timemean_D = 0.001; //1 ms
+   /*Ptr<ExponentialRandomVariable> randomTime_AB = CreateObject<ExponentialRandomVariable> ();
    randomTime_AB->SetAttribute ("Mean", DoubleValue (mean_AB));
    Ptr<ExponentialRandomVariable> randomTime_C = CreateObject<ExponentialRandomVariable> ();
    randomTime_C->SetAttribute ("Mean", DoubleValue (mean_C));
    Ptr<ExponentialRandomVariable> randomTime_D = CreateObject<ExponentialRandomVariable> ();
    randomTime_D->SetAttribute ("Mean", DoubleValue (mean_D));
-   
+   */
    //Mean packet time
-   double mean = 100; // 100 Bytes
-   Ptr<ExponentialRandomVariable> randomSize = CreateObject<ExponentialRandomVariable> ();
-   randomSize->SetAttribute ("Mean", DoubleValue (mean));
+   double packetsSizemean = 100; // 100 Bytes
+   //Ptr<ExponentialRandomVariable> randomSize = CreateObject<ExponentialRandomVariable> ();
+   //randomSize->SetAttribute ("Mean", DoubleValue (mean));
 
-   Simulator::ScheduleWithContext (sourceA->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceA, randomSize, randomTime_AB);
-   Simulator::ScheduleWithContext (sourceB->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceB, randomSize, randomTime_AB);
-   Simulator::ScheduleWithContext (sourceC->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceC, randomSize, randomTime_C);
-   Simulator::ScheduleWithContext (sourceD->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceD, randomSize, randomTime_D);
+   Simulator::ScheduleWithContext (sourceA->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceA, Size, time, timemean_AB, packetsSizemean);
+   Simulator::ScheduleWithContext (sourceB->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceB, Size, time, timemean_AB, packetsSizemean);
+   Simulator::ScheduleWithContext (sourceC->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceC, Size, time, timemean_C, packetsSizemean);
+   Simulator::ScheduleWithContext (sourceD->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceD, Size, time, timemean_D, packetsSizemean);
+   
+   //Simulator::ScheduleWithContext (sourceD->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceD, Size,time, mean_AB);
+
 
 
  
-   AsciiTraceHelper ascii;
+   /*AsciiTraceHelper ascii;
    p2p_1.EnableAsciiAll (ascii.CreateFileStream ("projectA-1.tr"));
    p2p_1.EnablePcapAll ("projectA-1");
    p2p_2.EnableAsciiAll (ascii.CreateFileStream ("projectA-2.tr"));
    p2p_2.EnablePcapAll ("projectA-2");
    p2p_3.EnableAsciiAll (ascii.CreateFileStream ("projectA-3.tr"));
-   p2p_3.EnablePcapAll ("projectA-3");
+   p2p_3.EnablePcapAll ("projectA-3");*/
  
    AnimationInterface anim ("project.xml");
    anim.EnablePacketMetadata (true);

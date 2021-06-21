@@ -50,11 +50,10 @@ void CheckQueue(QueueDiscContainer qdisc, Ptr<OutputStreamWrapper> streamTxt)
 	}
 }
 
-void DeviceTimeInQueueDiscTrace(Ptr<QueueDisc>qd, Ptr<OutputStreamWrapper> streamTxt)
+void DeviceTimeInQueueDiscTrace(Ptr<OutputStreamWrapper> streamTxt_delay, ns3::Time t)
 {
-	 //qd->TraceConnectWithoutContext( "SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt) );
-	 
-	 *streamTxt->GetStream()<< QueueDisc::PacketDequeued(qd.m_sojourn(Simulator::Now () - item->GetTimeStamp ()) << std::endl;	
+	*streamTxt_delay->GetStream()<< t.As(Time::MS) << std::endl;
+	
 }
 
 
@@ -192,15 +191,48 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
 	{
     		Simulator::Schedule(Seconds(t), &CheckQueue, qd, streamTxt);
 	}
-  
-   Ptr<QueueDisc>qd_delay = tc->GetRootQueueDiscOnDevice(dFdG.Get(0));
-   //qd->TraceConnectWithoutContext( "SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt) );
-   Ptr<OutputStreamWrapper> streamTxt_delay = asciiTraceHelper.CreateFileStream("queue_P2P_delay.txt");	
-   	for (float t = 1.0; t < 60; t += 0.001)
-	{
-    		Simulator::Schedule(Seconds(t), &DeviceTimeInQueueDiscTrace, qd_delay, streamTxt_delay);
-	}
    
+   Ptr<TrafficControlLayer> tf = c.Get(5)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_fg = tf->GetRootQueueDiscOnDevice(dFdG.Get(0));
+   Ptr<OutputStreamWrapper> streamTxt_fg = asciiTraceHelper.CreateFileStream("queue_P2P_fg.txt");
+   qd_fg->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_fg) );
+
+   Ptr<QueueDisc>qd_gf = tc->GetRootQueueDiscOnDevice(dFdG.Get(1));
+   Ptr<OutputStreamWrapper> streamTxt_gf = asciiTraceHelper.CreateFileStream("queue_P2P_gf.txt");
+   qd_gf->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_gf) );
+   //A-e-g-Server
+   //A-e
+   Ptr<TrafficControlLayer> tA = c.Get(0)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_Ae = tA->GetRootQueueDiscOnDevice(dAdE.Get(0));
+   Ptr<OutputStreamWrapper> streamTxt_Ae = asciiTraceHelper.CreateFileStream("queue_P2P_Ae.txt");
+   qd_fg->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_Ae) );
+   //e-g
+   Ptr<TrafficControlLayer> te = c.Get(4)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_eg = te->GetRootQueueDiscOnDevice(dEdG.Get(0));
+   Ptr<OutputStreamWrapper> streamTxt_eg = asciiTraceHelper.CreateFileStream("queue_P2P_eg.txt");
+   qd_fg->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_eg) );
+   //g-Server
+   Ptr<TrafficControlLayer> tg = c.Get(6)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_gs = tg->GetRootQueueDiscOnDevice(dGdS.Get(0));
+   Ptr<OutputStreamWrapper> streamTxt_gs = asciiTraceHelper.CreateFileStream("queue_P2P_gs.txt");
+   qd_gs->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_gs) );
+   //Server-g-e-A
+   //Server-g
+   Ptr<TrafficControlLayer> ts = c.Get(7)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_sg = ts->GetRootQueueDiscOnDevice(dGdS.Get(1));
+   Ptr<OutputStreamWrapper> streamTxt_sg = asciiTraceHelper.CreateFileStream("queue_P2P_sg.txt");
+   qd_sg->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_sg) );
+   //g-e
+   //Ptr<TrafficControlLayer> tg = c.Get(6)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_ge = tg->GetRootQueueDiscOnDevice(dEdG.Get(1));
+   Ptr<OutputStreamWrapper> streamTxt_ge = asciiTraceHelper.CreateFileStream("queue_P2P_ge.txt");
+   qd_ge->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_ge) );
+   //e-A
+   //Ptr<TrafficControlLayer> te = c.Get(4)->GetObject<TrafficControlLayer>();
+   Ptr<QueueDisc>qd_eA = te->GetRootQueueDiscOnDevice(dAdE.Get(1));
+   Ptr<OutputStreamWrapper> streamTxt_eA = asciiTraceHelper.CreateFileStream("queue_P2P_eA.txt");
+   qd_eA->TraceConnectWithoutContext("SojournTime", MakeBoundCallback(&DeviceTimeInQueueDiscTrace, streamTxt_eA) );
+	
    // Later, we add IP addresses.
    NS_LOG_INFO ("Assign IP Addresses.");
    Ipv4AddressHelper ipv4;
@@ -320,13 +352,13 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
 
 
  
-   AsciiTraceHelper ascii;
+   /*AsciiTraceHelper ascii;
    p2p_1.EnableAsciiAll (ascii.CreateFileStream ("projectA-1.tr"));
    p2p_1.EnablePcapAll ("projectA-1");
    p2p_2.EnableAsciiAll (ascii.CreateFileStream ("projectA-2.tr"));
    p2p_2.EnablePcapAll ("projectA-2");
    p2p_3.EnableAsciiAll (ascii.CreateFileStream ("projectA-3.tr"));
-   p2p_3.EnablePcapAll ("projectA-3");
+   p2p_3.EnablePcapAll ("projectA-3");*/
  
    AnimationInterface anim ("project.xml");
    anim.EnablePacketMetadata (true);
