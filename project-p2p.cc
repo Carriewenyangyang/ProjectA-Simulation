@@ -74,7 +74,7 @@ void DeviceTimeInQueueDiscTrace(Ptr<OutputStreamWrapper> streamTxt_delay, ns3::T
 }
 
 
-static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomSize,	Ptr<ExponentialRandomVariable> randomTime)
+static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> randomSize,	Ptr<ExponentialRandomVariable> randomTime, Ptr<OutputStreamWrapper> streamTxt)
 {
 	uint32_t pktSize = randomSize->GetInteger (); //Get random value for packet size
 
@@ -88,8 +88,10 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
 	
 	socket->Send (Create<Packet> (pktSize));
 
-	Time pktInterval = Seconds(randomTime->GetValue ()); //Get random value for next packet generation time 
-	Simulator::Schedule (pktInterval, &GenerateTraffic, socket, randomSize, randomTime); //Schedule next packet generation
+	Time pktInterval = Seconds(randomTime->GetValue ()); //Get random value for next packet generation time
+	
+	*streamTxt->GetStream()<<pktSize<<"  "<<pktInterval<<std::endl; 
+	Simulator::Schedule (pktInterval, &GenerateTraffic, socket, randomSize, randomTime, streamTxt); //Schedule next packet generation
 }
  
  int 
@@ -187,7 +189,7 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
    AsciiTraceHelper asciiTraceHelper;
    Ptr<OutputStreamWrapper> streamTxt = asciiTraceHelper.CreateFileStream("queue_P2P.txt");
    
-	for (float t = 1.0; t < 60; t += 0.001)
+	for (float t = 1.0; t < 30; t += 0.001)
 	{
     		Simulator::Schedule(Seconds(t), &CheckQueue, qd, streamTxt);
 	}
@@ -345,10 +347,11 @@ static void GenerateTraffic (Ptr<Socket> socket, Ptr<ExponentialRandomVariable> 
    Ptr<ExponentialRandomVariable> randomSize = CreateObject<ExponentialRandomVariable> ();
    randomSize->SetAttribute ("Mean", DoubleValue (mean));
 
-   Simulator::ScheduleWithContext (sourceA->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceA, randomSize, randomTime_AB);
-   Simulator::ScheduleWithContext (sourceB->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceB, randomSize, randomTime_AB);
-   Simulator::ScheduleWithContext (sourceC->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceC, randomSize, randomTime_C);
-   Simulator::ScheduleWithContext (sourceD->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceD, randomSize, randomTime_D);
+   Ptr<OutputStreamWrapper> streamTxt_ST = asciiTraceHelper.CreateFileStream("PacketSize_Time.txt");
+   Simulator::ScheduleWithContext (sourceA->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceA, randomSize, randomTime_AB,streamTxt_ST);
+   Simulator::ScheduleWithContext (sourceB->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceB, randomSize, randomTime_AB,streamTxt_ST);
+   Simulator::ScheduleWithContext (sourceC->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceC, randomSize, randomTime_C,streamTxt_ST);
+   Simulator::ScheduleWithContext (sourceD->GetNode ()->GetId (), Seconds (2.0), &GenerateTraffic, sourceD, randomSize, randomTime_D,streamTxt_ST);
 
 
  
